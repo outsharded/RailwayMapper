@@ -1,12 +1,17 @@
 package com.outsharded.railwaymapper;
 
 import com.outsharded.railwaymapper.MinecartTracker.MinecartData;
+import com.outsharded.railwaymapper.RailBlock;
+import com.outsharded.railwaymapper.RailwayMapperPlugin;
+
 import org.bukkit.Material;
 
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.logging.Level;
+
+import org.bukkit.plugin.Plugin;
 
 public class MapGenerator {
     
@@ -60,20 +65,39 @@ public class MapGenerator {
         String html = generateHTMLMap(rails, minecarts, minX, maxX, minZ, maxZ, worldName);
         
         // Save to file
-        File webDir = new File(plugin.getDataFolder(), "web");
-        if (!webDir.exists()) {
-            webDir.mkdirs();
-        }
-        
-        File mapFile = new File(webDir, "railmap.html");
-        Files.write(mapFile.toPath(), html.getBytes());
-        
-        // Generate JSON data file for dynamic updates
-        String json = generateJSONData(rails, minecarts);
-        File jsonFile = new File(webDir, "raildata.json");
-        Files.write(jsonFile.toPath(), json.getBytes());
-        
-        plugin.getLogger().info("Map generated successfully at: " + mapFile.getAbsolutePath());
+// Get the Dynmap plugin
+Plugin dynmap = plugin.getServer().getPluginManager().getPlugin("dynmap");
+if (dynmap == null) {
+    plugin.getLogger().severe("Dynmap not found! Cannot save web files.");
+    return;
+}
+
+// Create a subfolder inside Dynmap’s web directory
+File webDir = new File(dynmap.getDataFolder(), "web/railwaymapper");
+if (!webDir.exists() && !webDir.mkdirs()) {
+    plugin.getLogger().severe("Failed to create Dynmap web directory: " + webDir.getAbsolutePath());
+    return;
+}
+
+// Save the HTML map file
+File mapFile = new File(webDir, "railmap.html");
+try {
+    Files.writeString(mapFile.toPath(), html);
+} catch (IOException e) {
+    plugin.getLogger().severe("Failed to write railmap.html: " + e.getMessage());
+}
+
+// Generate JSON data for dynamic updates
+String jsonData = generateJSONData(rails, minecarts);
+File jsonFile = new File(webDir, "raildata.json");
+try {
+    Files.writeString(jsonFile.toPath(), jsonData);
+} catch (IOException e) {
+    plugin.getLogger().severe("Failed to write raildata.json: " + e.getMessage());
+}
+
+plugin.getLogger().info("Map generated successfully in Dynmap web folder: " + mapFile.getAbsolutePath());
+
     }
     
     private String generateHTMLMap(List<RailBlock> rails, List<MinecartData> minecarts,
@@ -120,6 +144,72 @@ public class MapGenerator {
         return html.toString();
     }
     
+    private String getDynamicJS() {
+    StringBuilder js = new StringBuilder();
+
+    js.append("const canvas = document.getElementById('railmap');\n");
+    js.append("const ctx = canvas.getContext('2d');\n");
+    js.append("let offsetX = 0, offsetY = 0, isDragging = false, startX, startY;\n");
+
+    js.append("canvas.addEventListener('mousedown', e => { isDragging = true; startX = e.clientX - offsetX; startY = e.clientY - offsetY; });\n");
+    js.append("canvas.addEventListener('mousemove', e => { if (isDragging) { offsetX = e.clientX - startX; offsetY = e.clientY - startY; drawMap(); } });\n");
+    js.append("canvas.addEventListener('mouseup', () => isDragging = false);\n");
+    js.append("canvas.addEventListener('mouseleave', () => isDragging = false);\n");
+
+    js.append("function worldToCanvas(x, z) {\n");
+    js.append("  return { x: (x - minX + 50) * scale + offsetX, y: (z - minZ + 50) * scale + offsetY };\n");
+    js.append("}\n");
+
+    js.append("let rails = [], minecarts = [];\n");
+    js.append("let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;\n");
+    js.append("const NETWORK_COLORS = ").append(Arrays.toString(NETWORK_COLORS)).append(";\n");
+
+    js.append("fetch('raildata.json')\n");
+    js.append(".then(r => r.json())\n");
+    js.append(".then(data => {\n");
+    js.append("  rails = data.rails;\n");
+    js.append("  minecarts = data.minecarts;\n");
+    js.append("  document.getElementById('rail-count').textContent = 'Rails: ' + rails.length;\n");
+    js.append("  document.getElementById('cart-count').textContent = 'Active Minecarts: ' + minecarts.length;\n");
+
+    // Calculate bounds
+    js.append("  rails.forEach(r => { minX = Math.min(minX, r.x); maxX = Math.max(maxX, r.x); minZ = Math.min(minZ, r.z); maxZ = Math.max(maxZ, r.z); });\n");
+    js.append("  const scaleX = canvas.width / (maxX - minX + 100);\n");
+    js.append("  const scaleZ = canvas.height / (maxZ - minZ + 100);\n");
+    js.append("  scale = Math.min(scaleX, scaleZ);\n");
+    js.append("  drawMap();\n");
+    js.append("});\n");
+
+    js.append("function drawRails() {\n");
+    js.append("  const networks = {};\n");
+    js.append("  rails.forEach(r => { if (!networks[r.network]) networks[r.network] = []; networks[r.network].push(r); });\n");
+    js.append("  let idx = 0;\n");
+    js.append("  for (const n in networks) {\n");
+    js.append("    const netRails = networks[n];\n");
+    js.append("    ctx.strokeStyle = NETWORK_COLORS[idx % NETWORK_COLORS.length];\n");
+    js.append("    idx++;\n");
+    js.append("    ctx.lineWidth = 2;\n");
+    js.append("    ctx.beginPath();\n");
+    js.append("    const first = worldToCanvas(netRails[0].x, netRails[0].z);\n");
+    js.append("    ctx.moveTo(first.x, first.y);\n");
+    js.append("    for (let i = 1; i < netRails.length; i++) {\n");
+    js.append("      const p = worldToCanvas(netRails[i].x, netRails[i].z);\n");
+    js.append("      ctx.lineTo(p.x, p.y);\n");
+    js.append("    }\n");
+    js.append("    ctx.stroke();\n");
+    js.append("  }\n");
+    js.append("}\n");
+
+    js.append("function drawCarts() {\n");
+    js.append("  ctx.fillStyle = '#FF1744'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;\n");
+    js.append("  minecarts.forEach(c => { const p = worldToCanvas(c.x, c.z); ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke(); });\n");
+    js.append("}\n");
+
+    js.append("function drawMap() { ctx.clearRect(0,0,canvas.width,canvas.height); drawRails(); drawCarts(); }\n");
+
+    return js.toString();
+}
+
     private String getCSS() {
         return "body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #1a1a1a; color: #fff; }\n" +
                ".header { text-align: center; margin-bottom: 20px; }\n" +

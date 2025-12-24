@@ -6,6 +6,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import java.util.logging.Level;
+import java.io.File;
+import java.io.InputStream;
+import java.io.IOException;
+import java.nio.file.Files;
 
 public class RailwayMapperPlugin extends JavaPlugin {
     
@@ -31,7 +35,7 @@ public class RailwayMapperPlugin extends JavaPlugin {
         // }
         
         // Initialize components
-        // scanner = new RailwayScanner(this, database, coreProtect);
+        scanner = new RailwayScanner(this, database);
         tracker = new MinecartTracker(this, database);
         mapGenerator = new MapGenerator(this, database);
         
@@ -106,6 +110,26 @@ public class RailwayMapperPlugin extends JavaPlugin {
         }
         
         return true;
+    }
+
+    public void saveDefaultConfig() {
+        File dataFolder = getDataFolder();
+        if (!dataFolder.exists()) {
+            dataFolder.mkdirs();
+        }
+
+        File configFile = new File(dataFolder, "config.yml");
+        if (configFile.exists()) return;
+
+        try (InputStream in = getResource("config.yml")) {
+            if (in == null) {
+                getLogger().warning("config.yml not found in resources!");
+                return;
+            }
+            Files.copy(in, configFile.toPath());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
     
     private void handleScanCommand(CommandSender sender, String[] args) {
