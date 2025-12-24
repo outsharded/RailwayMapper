@@ -1,0 +1,41 @@
+name: RailwayMapper
+version: 1.0.0
+main: com.outsharded.railwaymapper.RailwayMapperPlugin
+api-version: 1.21
+author: outsharded
+description: Maps all minecart railways and tracks live minecart positions
+website: https://yourwebsite.com
+softdepend: [CoreProtect]
+
+commands:
+  railmap:
+    description: Main command for Railway Mapper
+    usage: |-
+      /railmap - Show help
+      /railmap scan [world] - Scan for railways
+      /railmap view - View the railway map
+      /railmap stats - Show railway statistics
+      /railmap reload - Reload configuration
+    permission: railwaymapper.use
+    permission-message: You don't have permission to use this command
+
+permissions:
+  railwaymapper.*:
+    description: Gives access to all RailwayMapper features
+    default: op
+    children:
+      railwaymapper.use: true
+      railwaymapper.scan: true
+      railwaymapper.reload: true
+  
+  railwaymapper.use:
+    description: Allows using basic Railway Mapper commands
+    default: true
+  
+  railwaymapper.scan:
+    description: Allows scanning worlds for railways
+    default: op
+  
+  railwaymapper.reload:
+    description: Allows reloading the plugin configuration
+    default: op
