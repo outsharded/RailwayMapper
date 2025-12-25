@@ -1,6 +1,6 @@
 com/outsharded/railwaymapper/MapGenerator.class
 com/outsharded/railwaymapper/RailwayDatabase.class
-com/outsharded/railwaymapper/RailwayScanner$BlockPos.class
+com/outsharded/railwaymapper/RailLine.class
 com/outsharded/railwaymapper/RailwayMapperPlugin$4.class
 com/outsharded/railwaymapper/RailwayMapperPlugin$1.class
 com/outsharded/railwaymapper/RailwayScanner.class
@@ -9,6 +9,9 @@ com/outsharded/railwaymapper/RailBlock.class
 com/outsharded/railwaymapper/MinecartTracker.class
 com/outsharded/railwaymapper/RailwayStats.class
 com/outsharded/railwaymapper/MinecartTracker$MinecartData.class
+com/outsharded/railwaymapper/RailwayMapperPlugin$5.class
 com/outsharded/railwaymapper/RailwayNetwork.class
+com/outsharded/railwaymapper/RailwayDatabase$Station.class
 com/outsharded/railwaymapper/RailwayMapperPlugin$2.class
+com/outsharded/railwaymapper/CoreProtectIntegration.class
 com/outsharded/railwaymapper/RailwayMapperPlugin$3.class

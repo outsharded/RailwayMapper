@@ -5,6 +5,8 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.World;
+import org.bukkit.Bukkit;
 import java.util.logging.Level;
 import java.io.File;
 import java.io.InputStream;
@@ -16,7 +18,7 @@ public class RailwayMapperPlugin extends JavaPlugin {
     private RailwayScanner scanner;
     private MinecartTracker tracker;
     private MapGenerator mapGenerator;
-//    private CoreProtectIntegration coreProtect;
+    private CoreProtectIntegration coreProtect;
     private RailwayDatabase database;
     
     @Override
@@ -29,13 +31,13 @@ public class RailwayMapperPlugin extends JavaPlugin {
         database.initialize();
         
         // Initialize CoreProtect integration
-        // coreProtect = new CoreProtectIntegration(this);
-        // if (!coreProtect.isEnabled()) {
-        //     getLogger().warning("CoreProtect not found! Railway filtering by player will be disabled.");
-        // }
+        coreProtect = new CoreProtectIntegration(this);
+        if (!coreProtect.isEnabled()) {
+            getLogger().warning("CoreProtect not found! Railway filtering by player will be disabled.");
+        }
         
         // Initialize components
-        scanner = new RailwayScanner(this, database);
+        scanner = new RailwayScanner(this, database, coreProtect);
         tracker = new MinecartTracker(this, database);
         mapGenerator = new MapGenerator(this, database);
         
@@ -70,6 +72,7 @@ public class RailwayMapperPlugin extends JavaPlugin {
             sender.sendMessage("§e/railmap scan §7- Scan world for railways");
             sender.sendMessage("§e/railmap view §7- View the railway map");
             sender.sendMessage("§e/railmap stats §7- Show railway statistics");
+            sender.sendMessage("§e/railmap station §7- Manage stations");
             sender.sendMessage("§e/railmap reload §7- Reload configuration");
             return true;
         }
@@ -89,6 +92,14 @@ public class RailwayMapperPlugin extends JavaPlugin {
                     return true;
                 }
                 handleViewCommand((Player) sender);
+                break;
+                
+            case "station":
+                if (!sender.hasPermission("railwaymapper.scan")) {
+                    sender.sendMessage("§cYou don't have permission to use this command.");
+                    return true;
+                }
+                handleStationCommand(sender, args);
                 break;
                 
             case "stats":
@@ -138,11 +149,25 @@ public class RailwayMapperPlugin extends JavaPlugin {
         String worldName = args.length > 1 ? args[1] : 
             (sender instanceof Player ? ((Player) sender).getWorld().getName() : "world");
         
+        boolean fullScan = args.length > 2 && args[2].equalsIgnoreCase("full");
+        
         new BukkitRunnable() {
             @Override
             public void run() {
                 try {
-                    scanner.scanWorld(worldName);
+                    if (fullScan) {
+                        scanner.scanWorldFull(worldName);
+                    } else {
+                        scanner.scanWorld(worldName);
+                    }
+                    
+                    // Generate map after scan completes
+                    try {
+                        mapGenerator.generateMap(worldName);
+                    } catch (Exception e) {
+                        getLogger().log(Level.WARNING, "Error generating map", e);
+                    }
+                    
                     sender.sendMessage("§aRailway scan complete! Use /railmap stats to see results.");
                 } catch (Exception e) {
                     sender.sendMessage("§cError during scan: " + e.getMessage());
@@ -150,6 +175,68 @@ public class RailwayMapperPlugin extends JavaPlugin {
                 }
             }
         }.runTaskAsynchronously(this);
+    }
+    
+    private void handleStationCommand(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage("§cThis command can only be used by players.");
+            return;
+        }
+        
+        Player player = (Player) sender;
+        
+        if (args.length < 2) {
+            player.sendMessage("§6=== Station Commands ===");
+            player.sendMessage("§e/railmap station add <name> §7- Add station at your location");
+            player.sendMessage("§e/railmap station remove §7- Remove station at your location");
+            player.sendMessage("§e/railmap station list §7- List all stations");
+            return;
+        }
+        
+        String subcommand = args[1].toLowerCase();
+        
+        switch (subcommand) {
+            case "add":
+                if (args.length < 3) {
+                    player.sendMessage("§cUsage: /railmap station add <name>");
+                    return;
+                }
+                String stationName = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
+                int x = player.getLocation().getBlockX();
+                int y = player.getLocation().getBlockY();
+                int z = player.getLocation().getBlockZ();
+                database.addStation(player.getWorld().getName(), x, y, z, stationName, player.getName());
+                player.sendMessage("§aStation '§e" + stationName + "§a' added at your location!");
+                break;
+                
+            case "remove":
+                int rx = player.getLocation().getBlockX();
+                int ry = player.getLocation().getBlockY();
+                int rz = player.getLocation().getBlockZ();
+                database.removeStation(player.getWorld().getName(), rx, ry, rz);
+                player.sendMessage("§aStation removed!");
+                break;
+                
+            case "list":
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        java.util.List<RailwayDatabase.Station> stations = database.getStations(player.getWorld().getName());
+                        if (stations.isEmpty()) {
+                            player.sendMessage("§eNo stations in this world.");
+                            return;
+                        }
+                        player.sendMessage("§6=== Stations ===");
+                        for (RailwayDatabase.Station station : stations) {
+                            player.sendMessage("§e" + station.name + " §7at " + station.x + ", " + station.y + ", " + station.z);
+                        }
+                    }
+                }.runTaskAsynchronously(this);
+                break;
+                
+            default:
+                player.sendMessage("§cUnknown subcommand. Use /railmap station for help.");
+        }
     }
     
     private void handleViewCommand(Player player) {
@@ -189,11 +276,23 @@ public class RailwayMapperPlugin extends JavaPlugin {
     
     private void startMinecartTracking() {
         int updateInterval = getConfig().getInt("tracking.update-interval", 20); // ticks
+        boolean autoUpdateMap = getConfig().getBoolean("map.auto-update", true);
         
         new BukkitRunnable() {
             @Override
             public void run() {
                 tracker.updateMinecartPositions();
+                
+                // Auto-update map every N ticks (if tracking enabled and map auto-update enabled)
+                if (autoUpdateMap) {
+                    try {
+                        for (World world : Bukkit.getWorlds()) {
+                            mapGenerator.generateMap(world.getName());
+                        }
+                    } catch (Exception e) {
+                        getLogger().log(Level.FINE, "Error auto-updating map", e);
+                    }
+                }
             }
         }.runTaskTimer(this, 20L, updateInterval);
     }
@@ -202,7 +301,7 @@ public class RailwayMapperPlugin extends JavaPlugin {
         return database;
     }
     
-    // public CoreProtectIntegration getCoreProtect() {
-    //     return coreProtect;
-    // }
+    public CoreProtectIntegration getCoreProtect() {
+        return coreProtect;
+    }
 }

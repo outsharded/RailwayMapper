@@ -1,35 +1,34 @@
 # RailwayMapper Configuration
 
-# # CoreProtect Integration
-# coreprotect:
-#   enabled: true
-#   # Only include rails placed by players (not naturally generated)
-#   player-placed-only: true
-#   # Minimum time in days since rail was placed (0 = all time)
-#   min-age-days: 0
-#   # Maximum time in days since rail was placed (0 = no limit)
-#   max-age-days: 0
-#   # Ignore rails placed by specific players (e.g., admins doing world edits)
-#   ignore-players:
-#     - "WorldEdit"
-#     - "#worldedit"
+# CoreProtect Integration
+coreprotect:
+  enabled: true
+  # Only include rails placed by players (not naturally generated)
+  player-placed-only: true
+  # Minimum time in days since rail was placed (0 = all time)
+  min-age-days: 0
+  # Maximum time in days since rail was placed (0 = no limit)
+  max-age-days: 0
+  # Ignore rails placed by specific players (e.g., admins doing world edits)
+  ignore-players:
+    - "WorldEdit"
+    - "#worldedit"
 
 # Minecart Tracking
 tracking:
-  enabled: true
   # How often to update minecart positions (in ticks, 20 ticks = 1 second)
   update-interval: 20
   # Track empty minecarts
-  track-empty: true
+  track-empty: false
   # Show player names in occupied minecarts
-  show-passengers: true
-
+  show-passengers: true  # Show minecarts/players globally on the map
+  show-on-map: false
 # Map Generation
 map:
   # URL where the map will be accessible
   url: "http://*dynmap url here*/railwaymapper/railmap.html"
-  # Auto-generate map after scanning
-  auto-generate: true
+  # Auto-update map every tracking interval (dynamic updates)
+  auto-update: true
   # Map canvas size in pixels
   canvas-width: 2000
   canvas-height: 2000
@@ -40,50 +39,21 @@ map:
 
 # Scanning
 scanning:
-  # Worlds to scan (empty = all worlds)
-  worlds:
-    - world
-    - world_nether
-    - world_the_end
-  # Only scan loaded chunks
-  loaded-chunks-only: true
-  # Max chunks to scan per tick (lower = less lag)
-  chunks-per-tick: 10
-
-# Database
-database:
-  # Clean old minecart data after X minutes of inactivity
-  cleanup-interval-minutes: 30
-  # Vacuum database on startup to optimize
-  vacuum-on-startup: true
-
-# Performance
-performance:
-  # Enable async scanning to reduce lag
-  async-scanning: true
-  # Maximum time for scan operations (in seconds)
-  max-scan-time: 300
-
-# Network Detection
-networks:
-  # Minimum rails to count as a network
-  min-network-size: 10
-  # Detect stations (areas with multiple connections)
-  detect-stations: true
-  # Station detection radius
-  station-radius: 5
+  # Radius in chunks around each station to scan for connected rails
+  # This helps find complete networks by scanning unloaded chunks
+  station-radius: 3
 
 # Display
 display:
-  # Color theme for networks (will cycle through these colors)
+  # Color theme for networks (London tube-inspired)
   network-colors:
-    - "#FF6B6B"
-    - "#4ECDC4"
-    - "#45B7D1"
-    - "#FFA07A"
-    - "#98D8C8"
-    - "#F7DC6F"
-    - "#BB8FCE"
-    - "#85C1E2"
-    - "#F8B88B"
-    - "#76D7C4"
+    - "#E21836"     # Circle Line Red
+    - "#003DA5"     # Victoria Line Blue
+    - "#00BF63"     # Jubilee Line Green
+    - "#FFD700"     # District Line Yellow
+    - "#7B2131"     # Bakerloo Brown
+    - "#00A0E9"     # Central Line Light Blue
+    - "#F391B8"     # Hammersmith & City Pink
+    - "#B26199"     # Metropolitan Purple
+    - "#FFCC33"     # Northern Black (inverted)
+    - "#00C1DE"     # Piccadilly Cyan

@@ -15,6 +15,7 @@ commands:
       /railmap scan [world] - Scan for railways
       /railmap view - View the railway map
       /railmap stats - Show railway statistics
+      /railmap station [add|remove|list] - Manage stations
       /railmap reload - Reload configuration
     permission: railwaymapper.use
     permission-message: You don't have permission to use this command

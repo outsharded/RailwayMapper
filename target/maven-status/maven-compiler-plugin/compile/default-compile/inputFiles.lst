@@ -1,6 +1,8 @@
 /Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/MapGenerator.java
 /Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/MinecartTracker.java
 /Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/RailwayDatabase.java
+/Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/CoreProtectIntegration.java
+/Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/RailLine.java
 /Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/RailwayScanner.java
 /Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/RailBlock.java
 /Users/fabianoley/code/RailwayMapper/src/main/java/com/outsharded/railwaymapper/RailwayMapperPlugin.java

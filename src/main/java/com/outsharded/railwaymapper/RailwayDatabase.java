@@ -61,7 +61,22 @@ public class RailwayDatabase {
             "world TEXT NOT NULL," +
             "rail_count INTEGER," +
             "main_builder TEXT," +
+            "color TEXT DEFAULT '#FF6B6B'," +
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        );
+        
+        // Stations table
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS stations (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "world TEXT NOT NULL," +
+            "x INTEGER NOT NULL," +
+            "y INTEGER NOT NULL," +
+            "z INTEGER NOT NULL," +
+            "name TEXT NOT NULL," +
+            "created_by TEXT," +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+            "UNIQUE(world, x, y, z))"
         );
         
         // Minecart positions table
@@ -78,6 +93,14 @@ public class RailwayDatabase {
             "occupied INTEGER," +
             "passenger TEXT," +
             "last_updated TIMESTAMP)"
+        );
+        
+        // Rail networks table (stores serialized RailLine data)
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS rail_networks (" +
+            "world TEXT PRIMARY KEY," +
+            "network_json TEXT NOT NULL," +
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         );
         
         // Create indexes for faster queries
@@ -107,6 +130,62 @@ public class RailwayDatabase {
         } catch (SQLException e) {
             plugin.getLogger().log(Level.SEVERE, "Error clearing world data", e);
         }
+    }
+    
+    public void saveRailNetworks(String worldName, String networkJson) {
+        try {
+            PreparedStatement stmt = connection.prepareStatement(
+                "INSERT OR REPLACE INTO rail_networks (world, network_json, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)"
+            );
+            stmt.setString(1, worldName);
+            stmt.setString(2, networkJson);
+            stmt.executeUpdate();
+            stmt.close();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error saving rail networks for world " + worldName, e);
+        }
+    }
+    
+    public String getRailNetworks(String worldName) {
+        try {
+            PreparedStatement stmt = connection.prepareStatement(
+                "SELECT network_json FROM rail_networks WHERE world = ?"
+            );
+            stmt.setString(1, worldName);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                String json = rs.getString("network_json");
+                rs.close();
+                stmt.close();
+                return json;
+            }
+            
+            rs.close();
+            stmt.close();
+            return "[]";
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error retrieving rail networks for world " + worldName, e);
+            return "[]";
+        }
+    }
+    
+    public List<String> getAllWorlds() {
+        List<String> worlds = new ArrayList<>();
+        try {
+            Statement stmt = connection.createStatement();
+            ResultSet rs = stmt.executeQuery("SELECT DISTINCT world FROM rail_networks ORDER BY world");
+            
+            while (rs.next()) {
+                worlds.add(rs.getString("world"));
+            }
+            
+            rs.close();
+            stmt.close();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error retrieving worlds", e);
+        }
+        return worlds;
     }
     
     public void saveRailBlocks(List<RailBlock> blocks) {
@@ -341,6 +420,27 @@ public class RailwayDatabase {
             }
             rs.close();
             
+            // Count vertices from all rail networks JSON
+            rs = stmt.executeQuery("SELECT network_json FROM rail_networks");
+            int vertexCount = 0;
+            while (rs.next()) {
+                String json = rs.getString("network_json");
+                if (json != null && !json.isEmpty() && !json.equals("[]")) {
+                    try {
+                        // Simple count of vertex markers [x,y,z]
+                        vertexCount += countVerticesInJson(json);
+                    } catch (Exception e) {
+                        plugin.getLogger().log(Level.FINE, "Error parsing rail network JSON for vertex count", e);
+                    }
+                }
+            }
+            rs.close();
+            
+            // Set total rail segments (sum of all vertices, more accurate than rail_blocks count)
+            if (vertexCount > 0) {
+                stats.setTotalRails(vertexCount);
+            }
+            
             stmt.close();
             
         } catch (SQLException e) {
@@ -348,6 +448,127 @@ public class RailwayDatabase {
         }
         
         return stats;
+    }
+    
+    private int countVerticesInJson(String json) {
+        // Count vertex arrays: [x,y,z] in the JSON
+        int count = 0;
+        int bracketCount = 0;
+        for (char c : json.toCharArray()) {
+            if (c == '[') bracketCount++;
+            else if (c == ']') {
+                bracketCount--;
+                // A vertex is a nested bracket array [x,y,z] at depth 2 from root
+                if (bracketCount == 2) count++;
+            }
+        }
+        return count;
+    }
+    
+    public void assignNetworkColor(int networkId, String color) {
+        try {
+            PreparedStatement stmt = connection.prepareStatement(
+                "UPDATE networks SET color = ? WHERE id = ?"
+            );
+            stmt.setString(1, color);
+            stmt.setInt(2, networkId);
+            stmt.executeUpdate();
+            stmt.close();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error assigning network color", e);
+        }
+    }
+    
+    public String getNetworkColor(int networkId) {
+        try {
+            PreparedStatement stmt = connection.prepareStatement(
+                "SELECT color FROM networks WHERE id = ?"
+            );
+            stmt.setInt(1, networkId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                String color = rs.getString("color");
+                rs.close();
+                stmt.close();
+                return color != null ? color : "#FF6B6B";
+            }
+            rs.close();
+            stmt.close();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error getting network color", e);
+        }
+        return "#FF6B6B";
+    }
+    
+    public void addStation(String worldName, int x, int y, int z, String name, String createdBy) {
+        try {
+            PreparedStatement stmt = connection.prepareStatement(
+                "INSERT OR REPLACE INTO stations (world, x, y, z, name, created_by) " +
+                "VALUES (?, ?, ?, ?, ?, ?)"
+            );
+            stmt.setString(1, worldName);
+            stmt.setInt(2, x);
+            stmt.setInt(3, y);
+            stmt.setInt(4, z);
+            stmt.setString(5, name);
+            stmt.setString(6, createdBy);
+            stmt.executeUpdate();
+            stmt.close();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error adding station", e);
+        }
+    }
+    
+    public void removeStation(String worldName, int x, int y, int z) {
+        try {
+            PreparedStatement stmt = connection.prepareStatement(
+                "DELETE FROM stations WHERE world = ? AND x = ? AND y = ? AND z = ?"
+            );
+            stmt.setString(1, worldName);
+            stmt.setInt(2, x);
+            stmt.setInt(3, y);
+            stmt.setInt(4, z);
+            stmt.executeUpdate();
+            stmt.close();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error removing station", e);
+        }
+    }
+    
+    public java.util.List<Station> getStations(String worldName) {
+        java.util.List<Station> stations = new java.util.ArrayList<>();
+        try {
+            PreparedStatement stmt = connection.prepareStatement(
+                "SELECT x, y, z, name FROM stations WHERE world = ?"
+            );
+            stmt.setString(1, worldName);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                stations.add(new Station(
+                    rs.getInt("x"),
+                    rs.getInt("y"),
+                    rs.getInt("z"),
+                    rs.getString("name")
+                ));
+            }
+            rs.close();
+            stmt.close();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Error loading stations", e);
+        }
+        return stations;
+    }
+    
+    public static class Station {
+        public final int x, y, z;
+        public final String name;
+        
+        public Station(int x, int y, int z, String name) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.name = name;
+        }
     }
     
     public void close() {
